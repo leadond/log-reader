@@ -1,341 +1,271 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useLogContext } from '../context/LogContext';
-import LogViewer from '../components/LogViewer';
-import { FiAlertTriangle, FiInfo, FiCheckCircle, FiDownload, FiFileText } from 'react-icons/fi';
+import { FiAlertCircle, FiAlertTriangle, FiInfo, FiDownload, FiCpu, FiDatabase, FiClock } from 'react-icons/fi';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
 const Analysis = () => {
   const { id } = useParams();
-  const navigate = useNavigate();
-  const { getLog, analyzeLog, analysisResults, isAnalyzing, theme } = useLogContext();
+  const { logs, analyses, getAnalysis, loading, error, analyzeLog } = useLogContext();
+  const [analysis, setAnalysis] = useState(null);
   const [log, setLog] = useState(null);
-  const [result, setResult] = useState(null);
-  const [isExporting, setIsExporting] = useState(false);
   
   useEffect(() => {
-    const logData = getLog(id);
-    if (!logData) {
-      navigate('/upload');
-      return;
-    }
+    // Find the log
+    const foundLog = logs.find(l => l.id === id);
+    setLog(foundLog);
     
-    setLog(logData);
+    // Get analysis if it exists
+    const foundAnalysis = getAnalysis(id);
     
-    // Check if we already have analysis results
-    if (analysisResults[id]) {
-      setResult(analysisResults[id]);
-    } else {
-      // Analyze the log
-      analyzeLog(id).then(analysisResult => {
-        setResult(analysisResult);
+    if (foundAnalysis) {
+      setAnalysis(foundAnalysis);
+    } else if (foundLog && !foundLog.analyzed) {
+      // Analyze the log if not already analyzed
+      analyzeLog(id).then(result => {
+        setAnalysis(result);
+      }).catch(err => {
+        console.error('Error analyzing log:', err);
       });
     }
-  }, [id, getLog, analyzeLog, analysisResults, navigate]);
+  }, [id, logs, analyses, getAnalysis, analyzeLog]);
   
-  const getSeverityColor = (severity) => {
-    switch (severity) {
-      case 'high':
-        return 'text-red-600 dark:text-red-400';
-      case 'medium':
-        return 'text-yellow-600 dark:text-yellow-400';
-      case 'low':
-        return 'text-green-600 dark:text-green-400';
-      default:
-        return 'text-blue-600 dark:text-blue-400';
-    }
-  };
-  
-  const getSeverityIcon = (severity) => {
-    switch (severity) {
-      case 'high':
-        return <FiAlertTriangle className="h-5 w-5" />;
-      case 'medium':
-        return <FiInfo className="h-5 w-5" />;
-      case 'low':
-        return <FiCheckCircle className="h-5 w-5" />;
-      default:
-        return <FiInfo className="h-5 w-5" />;
-    }
-  };
-  
-  const exportToPDF = async () => {
-    if (!log || !result) return;
+  // Export as PDF
+  const exportAsPDF = async () => {
+    const element = document.getElementById('analysis-report');
+    const canvas = await html2canvas(element);
+    const imgData = canvas.toDataURL('image/png');
     
-    setIsExporting(true);
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const imgProps = pdf.getImageProperties(imgData);
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
     
-    try {
-      const reportElement = document.getElementById('analysis-report');
-      const canvas = await html2canvas(reportElement, {
-        scale: 2,
-        logging: false,
-        useCORS: true
-      });
-      
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-      
-      const imgWidth = 210;
-      const imgHeight = canvas.height * imgWidth / canvas.width;
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-      pdf.save(`log-analysis-${log.name.replace(/\s+/g, '-')}.pdf`);
-      
-      setIsExporting(false);
-    } catch (error) {
-      console.error('Error exporting to PDF:', error);
-      setIsExporting(false);
-    }
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+    pdf.save(`log-analysis-${id}.pdf`);
   };
+  
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+  
+  if (error) {
+    return (
+      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-700 dark:text-red-400">
+        <h2 className="text-lg font-semibold mb-2">Error</h2>
+        <p>{error}</p>
+        <Link to="/upload" className="mt-4 inline-block px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+          Try Again
+        </Link>
+      </div>
+    );
+  }
   
   if (!log) {
     return (
-      <div className="p-6 flex justify-center">
-        <div className="text-center">
-          <p className="text-gray-500 dark:text-gray-400">Log not found. Please upload a log file.</p>
-          <button
-            onClick={() => navigate('/upload')}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-          >
-            Upload Log
-          </button>
-        </div>
+      <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 text-yellow-700 dark:text-yellow-400">
+        <h2 className="text-lg font-semibold mb-2">Log Not Found</h2>
+        <p>The requested log could not be found.</p>
+        <Link to="/upload" className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+          Upload New Log
+        </Link>
       </div>
     );
   }
   
   return (
-    <div className="p-6">
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{log.name}</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {new Date(log.timestamp).toLocaleString()} • {log.content.length} bytes
-          </p>
-        </div>
-        
+    <div className="max-w-5xl mx-auto">
+      {/* Actions Bar */}
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-xl font-semibold text-gray-800 dark:text-white">
+          Log Analysis #{id.substring(0, 8)}
+        </h1>
         <button
-          onClick={exportToPDF}
-          disabled={isAnalyzing || isExporting || !result}
-          className={`px-4 py-2 rounded-md flex items-center ${
-            isAnalyzing || isExporting || !result
-              ? 'bg-gray-400 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
-          } text-white`}
+          onClick={exportAsPDF}
+          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
-          {isExporting ? (
-            <>
-              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Exporting...
-            </>
-          ) : (
-            <>
-              <FiDownload className="mr-2" />
-              Export Report
-            </>
-          )}
+          <FiDownload className="mr-2" />
+          Export as PDF
         </button>
       </div>
       
       <div id="analysis-report" className="space-y-6">
-        {/* Analysis Status */}
-        {isAnalyzing ? (
-          <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6 flex items-center justify-center">
-            <svg className="animate-spin -ml-1 mr-3 h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <p className="text-lg font-medium text-gray-900 dark:text-white">
-              Analyzing log file... This may take a moment.
-            </p>
+        {/* Log Content */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+          <h2 className="text-lg font-semibold mb-2 text-gray-800 dark:text-white">Log Content</h2>
+          <div className="bg-gray-100 dark:bg-gray-900 rounded-lg overflow-auto max-h-64">
+            <SyntaxHighlighter
+              language="log"
+              style={vscDarkPlus}
+              customStyle={{ margin: 0, borderRadius: '0.5rem' }}
+            >
+              {log.content}
+            </SyntaxHighlighter>
           </div>
-        ) : result ? (
+          <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+            Uploaded: {new Date(log.timestamp).toLocaleString()}
+          </div>
+        </div>
+        
+        {analysis ? (
           <>
-            {/* Summary */}
-            <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                <h2 className="text-lg font-medium text-gray-900 dark:text-white">Analysis Summary</h2>
-              </div>
-              
-              <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                    <div className="flex items-center mb-2">
-                      <FiFileText className="h-5 w-5 text-blue-600 dark:text-blue-400 mr-2" />
-                      <h3 className="font-medium text-gray-900 dark:text-white">Log Statistics</h3>
-                    </div>
-                    <ul className="space-y-2 text-sm">
-                      <li className="flex justify-between">
-                        <span className="text-gray-500 dark:text-gray-400">Total Lines:</span>
-                        <span className="font-medium text-gray-900 dark:text-white">{result.summary.totalLines}</span>
-                      </li>
-                      <li className="flex justify-between">
-                        <span className="text-gray-500 dark:text-gray-400">Errors:</span>
-                        <span className="font-medium text-red-600 dark:text-red-400">{result.summary.errorCount}</span>
-                      </li>
-                      <li className="flex justify-between">
-                        <span className="text-gray-500 dark:text-gray-400">Warnings:</span>
-                        <span className="font-medium text-yellow-600 dark:text-yellow-400">{result.summary.warningCount}</span>
-                      </li>
-                      <li className="flex justify-between">
-                        <span className="text-gray-500 dark:text-gray-400">Info:</span>
-                        <span className="font-medium text-blue-600 dark:text-blue-400">{result.summary.infoCount}</span>
-                      </li>
-                    </ul>
-                  </div>
-                  
-                  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                    <div className="flex items-center mb-2">
-                      <div className={`${getSeverityColor(result.summary.severity)}`}>
-                        {getSeverityIcon(result.summary.severity)}
-                      </div>
-                      <h3 className="font-medium text-gray-900 dark:text-white ml-2">Overall Severity</h3>
-                    </div>
-                    <div className="mt-4 text-center">
-                      <span className={`text-2xl font-bold ${getSeverityColor(result.summary.severity)} capitalize`}>
-                        {result.summary.severity}
-                      </span>
-                      <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                        {result.summary.severity === 'high' 
-                          ? 'Critical issues detected that require immediate attention'
-                          : result.summary.severity === 'medium'
-                            ? 'Some issues found that should be addressed'
-                            : 'Minor or no issues detected'}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                    <div className="flex items-center mb-2">
-                      <FiInfo className="h-5 w-5 text-blue-600 dark:text-blue-400 mr-2" />
-                      <h3 className="font-medium text-gray-900 dark:text-white">Time Range</h3>
-                    </div>
-                    {result.summary.timeRange ? (
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-500 dark:text-gray-400">Start:</span>
-                          <span className="font-medium text-gray-900 dark:text-white">
-                            {new Date(result.summary.timeRange.start).toLocaleString()}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500 dark:text-gray-400">End:</span>
-                          <span className="font-medium text-gray-900 dark:text-white">
-                            {new Date(result.summary.timeRange.end).toLocaleString()}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500 dark:text-gray-400">Duration:</span>
-                          <span className="font-medium text-gray-900 dark:text-white">
-                            {Math.round((new Date(result.summary.timeRange.end) - new Date(result.summary.timeRange.start)) / 1000 / 60)} minutes
-                          </span>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        No timestamp information found in log
-                      </p>
-                    )}
-                  </div>
-                </div>
+            {/* Application Context */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+              <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-white">Application Context</h2>
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <p className="text-blue-800 dark:text-blue-300 font-medium">{analysis.applicationContext}</p>
               </div>
             </div>
             
-            {/* Issues */}
-            <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                <h2 className="text-lg font-medium text-gray-900 dark:text-white">Detected Issues</h2>
-              </div>
-              
-              <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                {result.issues.length > 0 ? (
-                  result.issues.map((issue, index) => (
-                    <div key={index} className="p-6">
-                      <div className="flex items-start">
-                        <div className={`mt-0.5 ${getSeverityColor(issue.severity)}`}>
-                          {getSeverityIcon(issue.severity)}
-                        </div>
-                        <div className="ml-3">
-                          <h3 className="text-base font-medium text-gray-900 dark:text-white capitalize">
-                            {issue.type.replace(/-/g, ' ')} ({issue.count})
-                          </h3>
-                          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                            {issue.description}
-                          </p>
-                          
-                          {issue.lines && issue.lines.length > 0 && (
-                            <div className="mt-3 bg-gray-50 dark:bg-gray-700 rounded-md p-3 text-sm">
-                              <p className="font-medium text-gray-900 dark:text-white mb-2">Sample occurrences:</p>
-                              <ul className="space-y-1">
-                                {issue.lines.map((line, i) => (
-                                  <li key={i} className="text-gray-600 dark:text-gray-300 overflow-hidden text-ellipsis">
-                                    <span className="text-gray-500 dark:text-gray-400 mr-2">Line {line.number}:</span>
-                                    {line.content}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="p-6 text-center">
-                    <FiCheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-                    <p className="text-gray-500 dark:text-gray-400">No issues detected in this log file.</p>
-                  </div>
-                )}
+            {/* Summary Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <StatCard 
+                title="Errors" 
+                value={analysis.errorCount} 
+                icon={<FiAlertCircle size={20} />} 
+                color="red"
+              />
+              <StatCard 
+                title="Warnings" 
+                value={analysis.warningCount} 
+                icon={<FiAlertTriangle size={20} />} 
+                color="yellow"
+              />
+              <StatCard 
+                title="Info" 
+                value={analysis.infoCount} 
+                icon={<FiInfo size={20} />} 
+                color="blue"
+              />
+            </div>
+            
+            {/* Performance Metrics */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+              <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-white">Performance Metrics</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <MetricCard 
+                  title="Response Time" 
+                  value={`${analysis.performanceMetrics.responseTime.toFixed(2)} ms`} 
+                  icon={<FiClock />} 
+                />
+                <MetricCard 
+                  title="Memory Usage" 
+                  value={`${analysis.performanceMetrics.memoryUsage.toFixed(2)} MB`} 
+                  icon={<FiDatabase />} 
+                />
+                <MetricCard 
+                  title="CPU Load" 
+                  value={`${analysis.performanceMetrics.cpuLoad.toFixed(2)}%`} 
+                  icon={<FiCpu />} 
+                />
               </div>
             </div>
             
-            {/* Recommendations */}
-            {result.recommendations.length > 0 && (
-              <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                  <h2 className="text-lg font-medium text-gray-900 dark:text-white">Recommendations</h2>
+            {/* Detected Issues */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+              <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-white">Detected Issues</h2>
+              {analysis.detectedIssues.length > 0 ? (
+                <div className="space-y-4">
+                  {analysis.detectedIssues.map((issue, index) => (
+                    <IssueCard key={index} issue={issue} />
+                  ))}
                 </div>
-                
-                <div className="p-6">
-                  <ul className="space-y-4">
-                    {result.recommendations.map((rec, index) => (
-                      <li key={index} className="flex">
-                        <div className={`flex-shrink-0 mt-1 ${
-                          rec.priority === 'high' 
-                            ? 'text-red-600 dark:text-red-400' 
-                            : rec.priority === 'medium'
-                              ? 'text-yellow-600 dark:text-yellow-400'
-                              : 'text-blue-600 dark:text-blue-400'
-                        }`}>
-                          <FiInfo className="h-5 w-5" />
-                        </div>
-                        <div className="ml-3">
-                          <p className="text-base font-medium text-gray-900 dark:text-white">{rec.title}</p>
-                          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{rec.description}</p>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            )}
+              ) : (
+                <p className="text-gray-500 dark:text-gray-400">No issues detected.</p>
+              )}
+            </div>
           </>
         ) : (
-          <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6 text-center">
-            <p className="text-gray-500 dark:text-gray-400">No analysis results available.</p>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+            <p className="mt-4 text-gray-600 dark:text-gray-300">Analyzing log data...</p>
           </div>
         )}
-        
-        {/* Log Viewer */}
-        <LogViewer content={log.content} theme={theme} />
+      </div>
+    </div>
+  );
+};
+
+// Stat Card Component
+const StatCard = ({ title, value, icon, color }) => {
+  const colorClasses = {
+    blue: 'bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300',
+    green: 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300',
+    red: 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300',
+    yellow: 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300',
+  };
+  
+  return (
+    <div className={`rounded-lg p-4 ${colorClasses[color]}`}>
+      <div className="flex items-center">
+        <div className="p-2 rounded-full bg-white dark:bg-gray-700 mr-3">
+          {icon}
+        </div>
+        <div>
+          <p className="text-sm font-medium opacity-80">{title}</p>
+          <p className="text-2xl font-bold">{value}</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Metric Card Component
+const MetricCard = ({ title, value, icon }) => {
+  return (
+    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+      <div className="flex items-center">
+        <div className="p-2 rounded-full bg-white dark:bg-gray-600 mr-3 text-blue-600 dark:text-blue-400">
+          {icon}
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</p>
+          <p className="text-lg font-semibold text-gray-800 dark:text-white">{value}</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Issue Card Component
+const IssueCard = ({ issue }) => {
+  const typeColors = {
+    error: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300',
+    warning: 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-300',
+    info: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300',
+  };
+  
+  const typeIcons = {
+    error: <FiAlertCircle className="text-red-500 dark:text-red-400" />,
+    warning: <FiAlertTriangle className="text-yellow-500 dark:text-yellow-400" />,
+    info: <FiInfo className="text-blue-500 dark:text-blue-400" />,
+  };
+  
+  return (
+    <div className={`rounded-lg border p-4 ${typeColors[issue.type]}`}>
+      <div className="flex items-start">
+        <div className="mr-3 mt-1">
+          {typeIcons[issue.type]}
+        </div>
+        <div>
+          <h3 className="font-semibold">{issue.message}</h3>
+          {issue.lineNumber && (
+            <p className="text-sm mt-1 opacity-80">Line: {issue.lineNumber}</p>
+          )}
+          {issue.recommendation && (
+            <div className="mt-2 p-2 bg-white/50 dark:bg-black/20 rounded">
+              <p className="text-sm font-medium">Recommendation:</p>
+              <p className="text-sm">{issue.recommendation}</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

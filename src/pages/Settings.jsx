@@ -1,194 +1,274 @@
-import { useState } from 'react';
-import { useLogContext } from '../context/LogContext';
-import { FiSun, FiMoon, FiSave, FiTrash2 } from 'react-icons/fi';
+import { useState, useEffect } from 'react';
+import { FiSave, FiRefreshCw, FiMoon, FiSun } from 'react-icons/fi';
 
 const Settings = () => {
-  const { theme, toggleTheme, logs, deleteLog } = useLogContext();
-  const [showConfirmation, setShowConfirmation] = useState(false);
-  const [logToDelete, setLogToDelete] = useState(null);
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
+  const [settings, setSettings] = useState({
+    notifications: true,
+    autoAnalyze: true,
+    saveReports: true,
+    detectionLevel: 'medium',
+    maxLogSize: 5,
+    reportFormat: 'detailed'
+  });
+  const [isSaved, setIsSaved] = useState(false);
   
-  const handleDeleteLog = (log) => {
-    setLogToDelete(log);
-    setShowConfirmation(true);
+  // Toggle theme
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+    document.documentElement.classList.remove('light', 'dark');
+    document.documentElement.classList.add(newTheme);
   };
   
-  const confirmDelete = () => {
-    if (logToDelete) {
-      deleteLog(logToDelete.id);
-      setShowConfirmation(false);
-      setLogToDelete(null);
+  // Handle settings change
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setSettings(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+    setIsSaved(false);
+  };
+  
+  // Save settings
+  const saveSettings = () => {
+    localStorage.setItem('logAISettings', JSON.stringify(settings));
+    setIsSaved(true);
+    
+    // Reset saved indicator after 3 seconds
+    setTimeout(() => {
+      setIsSaved(false);
+    }, 3000);
+  };
+  
+  // Reset settings
+  const resetSettings = () => {
+    const defaultSettings = {
+      notifications: true,
+      autoAnalyze: true,
+      saveReports: true,
+      detectionLevel: 'medium',
+      maxLogSize: 5,
+      reportFormat: 'detailed'
+    };
+    
+    setSettings(defaultSettings);
+    localStorage.setItem('logAISettings', JSON.stringify(defaultSettings));
+    setIsSaved(true);
+    
+    // Reset saved indicator after 3 seconds
+    setTimeout(() => {
+      setIsSaved(false);
+    }, 3000);
+  };
+  
+  // Load settings from localStorage on component mount
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('logAISettings');
+    if (savedSettings) {
+      setSettings(JSON.parse(savedSettings));
     }
-  };
-  
-  const cancelDelete = () => {
-    setShowConfirmation(false);
-    setLogToDelete(null);
-  };
+  }, []);
   
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Settings</h1>
-      
-      <div className="space-y-6">
-        {/* Appearance */}
-        <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-            <h2 className="text-lg font-medium text-gray-900 dark:text-white">Appearance</h2>
+    <div className="max-w-4xl mx-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h2 className="text-xl font-semibold mb-6 text-gray-800 dark:text-white">Application Settings</h2>
+        
+        {/* Theme Toggle */}
+        <div className="mb-8">
+          <h3 className="text-lg font-medium mb-4 text-gray-700 dark:text-gray-300">Appearance</h3>
+          <div className="flex items-center">
+            <span className="mr-4 text-gray-600 dark:text-gray-400">Theme:</span>
+            <button
+              onClick={toggleTheme}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                theme === 'dark' ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  theme === 'dark' ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+              <span className="sr-only">Toggle Theme</span>
+              <FiSun className={`absolute left-1 text-yellow-400 ${theme === 'dark' ? 'opacity-0' : 'opacity-100'}`} size={12} />
+              <FiMoon className={`absolute right-1 text-gray-100 ${theme === 'dark' ? 'opacity-100' : 'opacity-0'}`} size={12} />
+            </button>
+            <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">
+              {theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
+            </span>
           </div>
+        </div>
+        
+        {/* General Settings */}
+        <div className="mb-8">
+          <h3 className="text-lg font-medium mb-4 text-gray-700 dark:text-gray-300">General Settings</h3>
           
-          <div className="p-6">
+          <div className="space-y-4">
+            {/* Notifications */}
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-base font-medium text-gray-900 dark:text-white">Theme</h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  Choose between light and dark mode
+                <label htmlFor="notifications" className="font-medium text-gray-700 dark:text-gray-300">
+                  Enable Notifications
+                </label>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Receive notifications when analysis is complete
                 </p>
               </div>
-              
-              <button
-                onClick={toggleTheme}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                {theme === 'dark' ? (
-                  <>
-                    <FiSun className="mr-2 -ml-1 h-4 w-4" />
-                    Light Mode
-                  </>
-                ) : (
-                  <>
-                    <FiMoon className="mr-2 -ml-1 h-4 w-4" />
-                    Dark Mode
-                  </>
-                )}
-              </button>
+              <div className="ml-4">
+                <input
+                  type="checkbox"
+                  id="notifications"
+                  name="notifications"
+                  checked={settings.notifications}
+                  onChange={handleChange}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            
+            {/* Auto Analyze */}
+            <div className="flex items-center justify-between">
+              <div>
+                <label htmlFor="autoAnalyze" className="font-medium text-gray-700 dark:text-gray-300">
+                  Auto-Analyze Logs
+                </label>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Automatically analyze logs when uploaded
+                </p>
+              </div>
+              <div className="ml-4">
+                <input
+                  type="checkbox"
+                  id="autoAnalyze"
+                  name="autoAnalyze"
+                  checked={settings.autoAnalyze}
+                  onChange={handleChange}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            
+            {/* Save Reports */}
+            <div className="flex items-center justify-between">
+              <div>
+                <label htmlFor="saveReports" className="font-medium text-gray-700 dark:text-gray-300">
+                  Save Reports
+                </label>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Automatically save analysis reports
+                </p>
+              </div>
+              <div className="ml-4">
+                <input
+                  type="checkbox"
+                  id="saveReports"
+                  name="saveReports"
+                  checked={settings.saveReports}
+                  onChange={handleChange}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+              </div>
             </div>
           </div>
         </div>
         
-        {/* Manage Logs */}
-        <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-            <h2 className="text-lg font-medium text-gray-900 dark:text-white">Manage Logs</h2>
-          </div>
+        {/* Analysis Settings */}
+        <div className="mb-8">
+          <h3 className="text-lg font-medium mb-4 text-gray-700 dark:text-gray-300">Analysis Settings</h3>
           
-          <div className="p-6">
-            <h3 className="text-base font-medium text-gray-900 dark:text-white mb-4">Uploaded Logs</h3>
+          <div className="space-y-6">
+            {/* Detection Level */}
+            <div>
+              <label htmlFor="detectionLevel" className="block font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Detection Level
+              </label>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                Set the sensitivity level for issue detection
+              </p>
+              <select
+                id="detectionLevel"
+                name="detectionLevel"
+                value={settings.detectionLevel}
+                onChange={handleChange}
+                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 py-2 pl-3 pr-10 text-base focus:border-blue-500 focus:outline-none focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              >
+                <option value="low">Low - Only critical issues</option>
+                <option value="medium">Medium - Critical and important issues</option>
+                <option value="high">High - All issues including minor ones</option>
+              </select>
+            </div>
             
-            {logs.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead className="bg-gray-50 dark:bg-gray-700">
-                    <tr>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                        Name
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                        Size
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                        Date
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    {logs.map((log) => (
-                      <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                          {log.name}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                          {(log.size / 1024).toFixed(2)} KB
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                          {new Date(log.timestamp).toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {log.analyzed ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                              Analyzed
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
-                              Not Analyzed
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <button
-                            onClick={() => handleDeleteLog(log)}
-                            className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                          >
-                            <FiTrash2 className="h-4 w-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p className="text-gray-500 dark:text-gray-400">No logs uploaded yet.</p>
-            )}
+            {/* Max Log Size */}
+            <div>
+              <label htmlFor="maxLogSize" className="block font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Maximum Log Size (MB)
+              </label>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                Set the maximum size for log files
+              </p>
+              <input
+                type="number"
+                id="maxLogSize"
+                name="maxLogSize"
+                min="1"
+                max="50"
+                value={settings.maxLogSize}
+                onChange={handleChange}
+                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 py-2 px-3 text-base focus:border-blue-500 focus:outline-none focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              />
+            </div>
+            
+            {/* Report Format */}
+            <div>
+              <label htmlFor="reportFormat" className="block font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Report Format
+              </label>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                Choose the level of detail for analysis reports
+              </p>
+              <select
+                id="reportFormat"
+                name="reportFormat"
+                value={settings.reportFormat}
+                onChange={handleChange}
+                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 py-2 pl-3 pr-10 text-base focus:border-blue-500 focus:outline-none focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              >
+                <option value="summary">Summary - Brief overview</option>
+                <option value="detailed">Detailed - Complete analysis</option>
+                <option value="technical">Technical - Developer-focused with code snippets</option>
+              </select>
+            </div>
           </div>
         </div>
         
-        {/* About */}
-        <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-            <h2 className="text-lg font-medium text-gray-900 dark:text-white">About</h2>
-          </div>
-          
-          <div className="p-6">
-            <h3 className="text-base font-medium text-gray-900 dark:text-white">LogInsight AI</h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Version 0.1.0
-            </p>
-            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-              An AI-powered log analysis tool that helps identify issues and provides recommendations.
-            </p>
-          </div>
+        {/* Action Buttons */}
+        <div className="flex justify-end space-x-4 mt-8">
+          <button
+            type="button"
+            onClick={resetSettings}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            <FiRefreshCw className="mr-2 -ml-1" />
+            Reset to Default
+          </button>
+          <button
+            type="button"
+            onClick={saveSettings}
+            className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+              isSaved
+                ? 'bg-green-600 hover:bg-green-700'
+                : 'bg-blue-600 hover:bg-blue-700'
+            }`}
+          >
+            <FiSave className="mr-2 -ml-1" />
+            {isSaved ? 'Saved!' : 'Save Settings'}
+          </button>
         </div>
       </div>
-      
-      {/* Delete Confirmation Modal */}
-      {showConfirmation && (
-        <div className="fixed inset-0 overflow-y-auto z-50 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" onClick={cancelDelete}></div>
-          
-          <div className="relative bg-white dark:bg-gray-800 rounded-lg max-w-md w-full mx-4 shadow-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white">Confirm Deletion</h3>
-            </div>
-            
-            <div className="p-6">
-              <p className="text-gray-700 dark:text-gray-300">
-                Are you sure you want to delete <span className="font-medium">{logToDelete?.name}</span>? This action cannot be undone.
-              </p>
-              
-              <div className="mt-6 flex justify-end space-x-3">
-                <button
-                  onClick={cancelDelete}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={confirmDelete}
-                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

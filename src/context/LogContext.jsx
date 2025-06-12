@@ -1,238 +1,109 @@
 import { createContext, useState, useContext } from 'react';
 
+// Create the context
 const LogContext = createContext();
 
+// Custom hook for using the context
 export const useLogContext = () => useContext(LogContext);
 
+// Provider component
 export const LogProvider = ({ children }) => {
   const [logs, setLogs] = useState([]);
-  const [currentLog, setCurrentLog] = useState(null);
-  const [analysisResults, setAnalysisResults] = useState({});
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [theme, setTheme] = useState('light');
+  const [analyses, setAnalyses] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Add a new log file
+  // Add a new log
   const addLog = (log) => {
     const newLog = {
       id: Date.now().toString(),
-      name: log.name || `Log ${logs.length + 1}`,
-      content: log.content,
-      size: log.content.length,
+      content: log,
       timestamp: new Date().toISOString(),
       analyzed: false
     };
-    
     setLogs(prevLogs => [...prevLogs, newLog]);
     return newLog.id;
   };
 
-  // Get a log by ID
-  const getLog = (id) => {
-    return logs.find(log => log.id === id) || null;
-  };
-
-  // Delete a log
-  const deleteLog = (id) => {
-    setLogs(prevLogs => prevLogs.filter(log => log.id !== id));
-    if (currentLog?.id === id) {
-      setCurrentLog(null);
-    }
-    // Also remove analysis results
-    const newResults = { ...analysisResults };
-    delete newResults[id];
-    setAnalysisResults(newResults);
-  };
-
-  // Analyze a log file
-  const analyzeLog = async (id) => {
-    const log = getLog(id);
-    if (!log) return null;
-    
-    setIsAnalyzing(true);
+  // Analyze a log
+  const analyzeLog = async (logId) => {
+    setLoading(true);
+    setError(null);
     
     try {
-      // Simulate AI analysis with a delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const log = logs.find(l => l.id === logId);
+      if (!log) throw new Error('Log not found');
       
-      // Mock analysis results
-      const result = mockAnalysis(log.content);
+      // Simulate AI analysis
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // Update log status
+      const analysis = {
+        id: logId,
+        timestamp: new Date().toISOString(),
+        summary: "Log analysis completed successfully",
+        errorCount: Math.floor(Math.random() * 10),
+        warningCount: Math.floor(Math.random() * 15),
+        infoCount: Math.floor(Math.random() * 20),
+        applicationContext: "Spring Boot Application",
+        detectedIssues: [
+          {
+            type: "error",
+            message: "NullPointerException in UserService.java",
+            lineNumber: 42,
+            recommendation: "Check for null user object before accessing properties"
+          },
+          {
+            type: "warning",
+            message: "Slow database query in ProductRepository",
+            lineNumber: 156,
+            recommendation: "Add index to product_category column"
+          }
+        ],
+        performanceMetrics: {
+          responseTime: Math.random() * 500 + 100,
+          memoryUsage: Math.random() * 1024 + 512,
+          cpuLoad: Math.random() * 80 + 20
+        }
+      };
+      
+      setAnalyses(prev => [...prev, analysis]);
+      
+      // Mark log as analyzed
       setLogs(prevLogs => 
         prevLogs.map(l => 
-          l.id === id ? { ...l, analyzed: true } : l
+          l.id === logId ? { ...l, analyzed: true } : l
         )
       );
       
-      // Store analysis results
-      setAnalysisResults(prev => ({
-        ...prev,
-        [id]: result
-      }));
-      
-      setIsAnalyzing(false);
-      return result;
-    } catch (error) {
-      console.error('Error analyzing log:', error);
-      setIsAnalyzing(false);
-      return null;
+      setLoading(false);
+      return analysis;
+    } catch (err) {
+      setError(err.message);
+      setLoading(false);
+      throw err;
     }
   };
 
-  // Mock analysis function
-  const mockAnalysis = (content) => {
-    const lines = content.split('\n');
-    
-    // Count error types
-    const errorCount = lines.filter(line => 
-      line.toLowerCase().includes('error') || 
-      line.toLowerCase().includes('exception') || 
-      line.toLowerCase().includes('fail')
-    ).length;
-    
-    const warningCount = lines.filter(line => 
-      line.toLowerCase().includes('warning') || 
-      line.toLowerCase().includes('warn')
-    ).length;
-    
-    const infoCount = lines.filter(line => 
-      line.toLowerCase().includes('info') || 
-      line.toLowerCase().includes('information')
-    ).length;
-    
-    // Extract timestamps if present
-    const timestampRegex = /\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}/g;
-    const timestamps = [];
-    lines.forEach(line => {
-      const matches = line.match(timestampRegex);
-      if (matches) {
-        timestamps.push(...matches);
-      }
-    });
-    
-    // Find potential issues
-    const issues = [];
-    
-    if (errorCount > 0) {
-      issues.push({
-        type: 'error',
-        count: errorCount,
-        description: 'Critical errors detected in log',
-        severity: 'high'
-      });
-    }
-    
-    if (warningCount > 0) {
-      issues.push({
-        type: 'warning',
-        count: warningCount,
-        description: 'Warnings found that may indicate potential problems',
-        severity: 'medium'
-      });
-    }
-    
-    // Extract specific error patterns
-    const nullPointerLines = lines.filter(line => 
-      line.toLowerCase().includes('null pointer') || 
-      line.toLowerCase().includes('nullpointerexception')
-    );
-    
-    if (nullPointerLines.length > 0) {
-      issues.push({
-        type: 'null-pointer',
-        count: nullPointerLines.length,
-        description: 'Null pointer exceptions detected',
-        severity: 'high',
-        lines: nullPointerLines.map((line, i) => ({ 
-          number: lines.indexOf(line) + 1, 
-          content: line 
-        })).slice(0, 5)
-      });
-    }
-    
-    const timeoutLines = lines.filter(line => 
-      line.toLowerCase().includes('timeout') || 
-      line.toLowerCase().includes('timed out')
-    );
-    
-    if (timeoutLines.length > 0) {
-      issues.push({
-        type: 'timeout',
-        count: timeoutLines.length,
-        description: 'Timeout errors detected',
-        severity: 'medium',
-        lines: timeoutLines.map((line, i) => ({ 
-          number: lines.indexOf(line) + 1, 
-          content: line 
-        })).slice(0, 5)
-      });
-    }
-    
-    // Generate recommendations
-    const recommendations = [];
-    
-    if (errorCount > 0) {
-      recommendations.push({
-        title: 'Address critical errors',
-        description: 'Fix the identified critical errors to improve system stability',
-        priority: 'high'
-      });
-    }
-    
-    if (nullPointerLines.length > 0) {
-      recommendations.push({
-        title: 'Fix null pointer exceptions',
-        description: 'Add proper null checks to prevent null pointer exceptions',
-        priority: 'high'
-      });
-    }
-    
-    if (timeoutLines.length > 0) {
-      recommendations.push({
-        title: 'Optimize timeout operations',
-        description: 'Review and optimize operations that are timing out',
-        priority: 'medium'
-      });
-    }
-    
-    // Generate summary statistics
-    const summary = {
-      totalLines: lines.length,
-      errorCount,
-      warningCount,
-      infoCount,
-      timeRange: timestamps.length > 1 ? {
-        start: new Date(timestamps[0]).toISOString(),
-        end: new Date(timestamps[timestamps.length - 1]).toISOString()
-      } : null,
-      severity: errorCount > 10 ? 'high' : errorCount > 0 ? 'medium' : 'low'
-    };
-    
-    return {
-      summary,
-      issues,
-      recommendations,
-      timestamp: new Date().toISOString()
-    };
+  // Delete a log
+  const deleteLog = (logId) => {
+    setLogs(prevLogs => prevLogs.filter(log => log.id !== logId));
+    setAnalyses(prevAnalyses => prevAnalyses.filter(analysis => analysis.id !== logId));
   };
 
-  // Toggle theme
-  const toggleTheme = () => {
-    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+  // Get a specific analysis
+  const getAnalysis = (logId) => {
+    return analyses.find(analysis => analysis.id === logId);
   };
 
   const value = {
     logs,
-    currentLog,
-    setCurrentLog,
-    analysisResults,
-    isAnalyzing,
-    theme,
+    analyses,
+    loading,
+    error,
     addLog,
-    getLog,
-    deleteLog,
     analyzeLog,
-    toggleTheme
+    deleteLog,
+    getAnalysis
   };
 
   return (

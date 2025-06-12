@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useLogContext } from '../context/LogContext';
-import { FiFileText, FiAlertTriangle, FiCheckCircle, FiActivity, FiClock } from 'react-icons/fi';
-import { Bar, Doughnut } from 'react-chartjs-2';
+import { FiFileText, FiAlertCircle, FiAlertTriangle, FiInfo, FiClock } from 'react-icons/fi';
+import { Link } from 'react-router-dom';
+import { Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -11,253 +10,176 @@ import {
   Title,
   Tooltip,
   Legend,
-  ArcElement
 } from 'chart.js';
 
-// Register ChartJS components
+// Register Chart.js components
 ChartJS.register(
   CategoryScale,
   LinearScale,
   BarElement,
   Title,
   Tooltip,
-  Legend,
-  ArcElement
+  Legend
 );
 
 const Dashboard = () => {
-  const { logs, analysisResults } = useLogContext();
-  const navigate = useNavigate();
-  const [stats, setStats] = useState({
-    totalLogs: 0,
-    analyzedLogs: 0,
-    totalIssues: 0,
-    criticalIssues: 0,
-    warningIssues: 0
-  });
+  const { logs, analyses } = useLogContext();
   
-  useEffect(() => {
-    // Calculate dashboard statistics
-    const analyzedLogs = logs.filter(log => log.analyzed);
-    let totalIssues = 0;
-    let criticalIssues = 0;
-    let warningIssues = 0;
-    
-    analyzedLogs.forEach(log => {
-      const result = analysisResults[log.id];
-      if (result) {
-        totalIssues += result.issues.length;
-        criticalIssues += result.issues.filter(issue => issue.severity === 'high').length;
-        warningIssues += result.issues.filter(issue => issue.severity === 'medium').length;
-      }
-    });
-    
-    setStats({
-      totalLogs: logs.length,
-      analyzedLogs: analyzedLogs.length,
-      totalIssues,
-      criticalIssues,
-      warningIssues
-    });
-  }, [logs, analysisResults]);
+  // Calculate statistics
+  const totalLogs = logs.length;
+  const analyzedLogs = logs.filter(log => log.analyzed).length;
+  const totalErrors = analyses.reduce((sum, analysis) => sum + analysis.errorCount, 0);
+  const totalWarnings = analyses.reduce((sum, analysis) => sum + analysis.warningCount, 0);
   
-  // Chart data for issue types
-  const issueTypeData = {
-    labels: ['Critical', 'Warning', 'Info'],
+  // Chart data
+  const chartData = {
+    labels: ['Errors', 'Warnings', 'Info'],
     datasets: [
       {
-        label: 'Issue Types',
-        data: [stats.criticalIssues, stats.warningIssues, stats.totalIssues - stats.criticalIssues - stats.warningIssues],
+        label: 'Log Events',
+        data: [totalErrors, totalWarnings, analyses.reduce((sum, analysis) => sum + analysis.infoCount, 0)],
         backgroundColor: [
           'rgba(255, 99, 132, 0.6)',
-          'rgba(255, 206, 86, 0.6)',
+          'rgba(255, 159, 64, 0.6)',
           'rgba(54, 162, 235, 0.6)',
         ],
         borderColor: [
-          'rgba(255, 99, 132, 1)',
-          'rgba(255, 206, 86, 1)',
-          'rgba(54, 162, 235, 1)',
+          'rgb(255, 99, 132)',
+          'rgb(255, 159, 64)',
+          'rgb(54, 162, 235)',
         ],
         borderWidth: 1,
       },
     ],
   };
   
-  // Chart data for log analysis status
-  const logStatusData = {
-    labels: ['Analyzed', 'Not Analyzed'],
-    datasets: [
-      {
-        label: 'Log Status',
-        data: [stats.analyzedLogs, stats.totalLogs - stats.analyzedLogs],
-        backgroundColor: [
-          'rgba(75, 192, 192, 0.6)',
-          'rgba(201, 203, 207, 0.6)',
-        ],
-        borderColor: [
-          'rgba(75, 192, 192, 1)',
-          'rgba(201, 203, 207, 1)',
-        ],
-        borderWidth: 1,
+  const chartOptions = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'top',
       },
-    ],
+      title: {
+        display: true,
+        text: 'Log Event Distribution',
+      },
+    },
   };
   
   // Recent logs
   const recentLogs = [...logs].sort((a, b) => 
     new Date(b.timestamp) - new Date(a.timestamp)
   ).slice(0, 5);
-  
+
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Dashboard</h1>
-      
-      {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 flex items-center">
-          <div className="rounded-full bg-blue-100 dark:bg-blue-900 p-3 mr-4">
-            <FiFileText className="h-6 w-6 text-blue-600 dark:text-blue-300" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Logs</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalLogs}</p>
-          </div>
-        </div>
-        
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 flex items-center">
-          <div className="rounded-full bg-green-100 dark:bg-green-900 p-3 mr-4">
-            <FiCheckCircle className="h-6 w-6 text-green-600 dark:text-green-300" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Analyzed Logs</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.analyzedLogs}</p>
-          </div>
-        </div>
-        
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 flex items-center">
-          <div className="rounded-full bg-yellow-100 dark:bg-yellow-900 p-3 mr-4">
-            <FiAlertTriangle className="h-6 w-6 text-yellow-600 dark:text-yellow-300" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Issues</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalIssues}</p>
-          </div>
-        </div>
-        
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 flex items-center">
-          <div className="rounded-full bg-red-100 dark:bg-red-900 p-3 mr-4">
-            <FiActivity className="h-6 w-6 text-red-600 dark:text-red-300" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Critical Issues</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.criticalIssues}</p>
-          </div>
-        </div>
+    <div className="space-y-6">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard 
+          title="Total Logs" 
+          value={totalLogs} 
+          icon={<FiFileText className="text-blue-500" size={24} />} 
+          color="blue"
+        />
+        <StatCard 
+          title="Analyzed Logs" 
+          value={analyzedLogs} 
+          icon={<FiClock className="text-green-500" size={24} />} 
+          color="green"
+        />
+        <StatCard 
+          title="Total Errors" 
+          value={totalErrors} 
+          icon={<FiAlertCircle className="text-red-500" size={24} />} 
+          color="red"
+        />
+        <StatCard 
+          title="Total Warnings" 
+          value={totalWarnings} 
+          icon={<FiAlertTriangle className="text-yellow-500" size={24} />} 
+          color="yellow"
+        />
       </div>
       
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Issue Distribution</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+          <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-white">Event Distribution</h2>
           <div className="h-64">
-            <Doughnut 
-              data={issueTypeData} 
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: 'bottom',
-                    labels: {
-                      color: document.documentElement.classList.contains('dark') ? 'white' : 'black'
-                    }
-                  }
-                }
-              }}
-            />
+            <Bar data={chartData} options={chartOptions} />
           </div>
         </div>
         
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Log Analysis Status</h2>
-          <div className="h-64">
-            <Bar 
-              data={logStatusData}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    display: false
-                  }
-                },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    ticks: {
-                      color: document.documentElement.classList.contains('dark') ? 'white' : 'black'
-                    },
-                    grid: {
-                      color: document.documentElement.classList.contains('dark') ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
-                    }
-                  },
-                  x: {
-                    ticks: {
-                      color: document.documentElement.classList.contains('dark') ? 'white' : 'black'
-                    },
-                    grid: {
-                      color: document.documentElement.classList.contains('dark') ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
-                    }
-                  }
-                }
-              }}
-            />
-          </div>
-        </div>
-      </div>
-      
-      {/* Recent Logs */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-medium text-gray-900 dark:text-white">Recent Logs</h2>
-        </div>
-        
-        <div className="divide-y divide-gray-200 dark:divide-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+          <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-white">Recent Logs</h2>
           {recentLogs.length > 0 ? (
-            recentLogs.map(log => (
-              <div 
-                key={log.id} 
-                className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-                onClick={() => navigate(`/analysis/${log.id}`)}
-              >
-                <div className="flex items-center">
-                  <FiFileText className="h-5 w-5 text-gray-400 mr-3" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">{log.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {log.size} bytes • {log.analyzed ? 'Analyzed' : 'Not analyzed'}
-                    </p>
+            <div className="space-y-3">
+              {recentLogs.map(log => (
+                <div key={log.id} className="border-b border-gray-200 dark:border-gray-700 pb-2">
+                  <div className="flex justify-between items-start">
+                    <div className="truncate flex-1">
+                      <Link 
+                        to={`/analysis/${log.id}`}
+                        className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                      >
+                        Log #{log.id.substring(0, 8)}
+                      </Link>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                        {log.content.substring(0, 60)}...
+                      </p>
+                    </div>
+                    <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap ml-2">
+                      {new Date(log.timestamp).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="mt-1">
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      log.analyzed 
+                        ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400' 
+                        : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400'
+                    }`}>
+                      {log.analyzed ? 'Analyzed' : 'Pending'}
+                    </span>
                   </div>
                 </div>
-                <div className="flex items-center">
-                  <FiClock className="h-4 w-4 text-gray-400 mr-1" />
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                    {new Date(log.timestamp).toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            ))
+              ))}
+            </div>
           ) : (
-            <div className="px-6 py-8 text-center">
-              <p className="text-gray-500 dark:text-gray-400">No logs available. Upload a log file to get started.</p>
-              <button
-                onClick={() => navigate('/upload')}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <FiFileText size={40} className="mx-auto mb-2" />
+              <p>No logs uploaded yet</p>
+              <Link 
+                to="/upload" 
+                className="mt-2 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
-                Upload Log
-              </button>
+                Upload Logs
+              </Link>
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Stat Card Component
+const StatCard = ({ title, value, icon, color }) => {
+  const colorClasses = {
+    blue: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800',
+    green: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800',
+    red: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',
+    yellow: 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800',
+  };
+  
+  return (
+    <div className={`rounded-lg shadow border ${colorClasses[color]} p-4`}>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-gray-600 dark:text-gray-300">{title}</p>
+          <p className="text-2xl font-bold text-gray-800 dark:text-white">{value}</p>
+        </div>
+        <div className="p-3 rounded-full bg-white dark:bg-gray-700 shadow-sm">
+          {icon}
         </div>
       </div>
     </div>

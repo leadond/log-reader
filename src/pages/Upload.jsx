@@ -1,20 +1,31 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLogContext } from '../context/LogContext';
-import { FiUpload, FiFile, FiX, FiClipboard, FiCheck } from 'react-icons/fi';
+import { FiUpload, FiClipboard, FiFile } from 'react-icons/fi';
 
 const Upload = () => {
-  const { addLog } = useLogContext();
-  const navigate = useNavigate();
+  const [logText, setLogText] = useState('');
+  const [uploadMethod, setUploadMethod] = useState('paste'); // 'paste' or 'file'
+  const [fileName, setFileName] = useState('');
   const [dragActive, setDragActive] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [fileContent, setFileContent] = useState('');
-  const [pastedContent, setPastedContent] = useState('');
-  const [activeTab, setActiveTab] = useState('upload');
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const fileInputRef = useRef(null);
   
+  const { addLog, analyzeLog } = useLogContext();
+  const navigate = useNavigate();
+  
+  // Handle file upload
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setFileName(file.name);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setLogText(event.target.result);
+      };
+      reader.readAsText(file);
+    }
+  };
+  
+  // Handle drag events
   const handleDrag = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -26,249 +37,154 @@ const Upload = () => {
     }
   };
   
+  // Handle drop event
   const handleDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
     
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileSelect(e.dataTransfer.files[0]);
+      const file = e.dataTransfer.files[0];
+      setFileName(file.name);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setLogText(event.target.result);
+      };
+      reader.readAsText(file);
+      setUploadMethod('file');
     }
   };
   
-  const handleFileSelect = (file) => {
-    if (file.type !== 'text/plain' && !file.name.endsWith('.log')) {
-      setError('Please upload a text or log file');
-      setSelectedFile(null);
-      return;
-    }
+  // Handle form submission
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     
-    setError('');
-    setSelectedFile(file);
-    
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setFileContent(e.target.result);
-    };
-    reader.readAsText(file);
-  };
-  
-  const handleFileInputChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      handleFileSelect(e.target.files[0]);
-    }
-  };
-  
-  const handleUploadClick = () => {
-    fileInputRef.current.click();
-  };
-  
-  const handleRemoveFile = () => {
-    setSelectedFile(null);
-    setFileContent('');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-  
-  const handlePasteChange = (e) => {
-    setPastedContent(e.target.value);
-  };
-  
-  const handleSubmit = async () => {
-    setIsLoading(true);
-    setError('');
-    
-    try {
-      let content = '';
-      let name = '';
-      
-      if (activeTab === 'upload') {
-        if (!selectedFile) {
-          setError('Please select a file to upload');
-          setIsLoading(false);
-          return;
-        }
-        content = fileContent;
-        name = selectedFile.name;
-      } else {
-        if (!pastedContent.trim()) {
-          setError('Please paste some log content');
-          setIsLoading(false);
-          return;
-        }
-        content = pastedContent;
-        name = `Pasted Log ${new Date().toLocaleString()}`;
-      }
-      
+    if (logText.trim()) {
       // Add log to context
-      const logId = addLog({
-        name,
-        content
-      });
+      const logId = addLog(logText);
       
-      // Navigate to analysis page
-      setIsLoading(false);
-      navigate(`/analysis/${logId}`);
-    } catch (error) {
-      console.error('Error uploading log:', error);
-      setError('An error occurred while processing the log');
-      setIsLoading(false);
+      // Analyze the log
+      try {
+        await analyzeLog(logId);
+        // Navigate to analysis page
+        navigate(`/analysis/${logId}`);
+      } catch (error) {
+        console.error('Error analyzing log:', error);
+      }
     }
   };
   
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Upload Log</h1>
-      
-      {/* Tab Navigation */}
-      <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6">
-        <button
-          className={`py-2 px-4 font-medium text-sm focus:outline-none ${
-            activeTab === 'upload'
-              ? 'text-blue-600 border-b-2 border-blue-600 dark:text-blue-400 dark:border-blue-400'
-              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-          }`}
-          onClick={() => setActiveTab('upload')}
-        >
-          <FiUpload className="inline-block mr-2" />
-          Upload File
-        </button>
-        <button
-          className={`py-2 px-4 font-medium text-sm focus:outline-none ${
-            activeTab === 'paste'
-              ? 'text-blue-600 border-b-2 border-blue-600 dark:text-blue-400 dark:border-blue-400'
-              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-          }`}
-          onClick={() => setActiveTab('paste')}
-        >
-          <FiClipboard className="inline-block mr-2" />
-          Paste Content
-        </button>
+    <div className="max-w-4xl mx-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Upload Logs for Analysis</h2>
+        
+        {/* Upload Method Tabs */}
+        <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6">
+          <button
+            className={`px-4 py-2 font-medium text-sm focus:outline-none ${
+              uploadMethod === 'paste'
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+            onClick={() => setUploadMethod('paste')}
+          >
+            <FiClipboard className="inline mr-2" />
+            Paste Log
+          </button>
+          <button
+            className={`px-4 py-2 font-medium text-sm focus:outline-none ${
+              uploadMethod === 'file'
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+            onClick={() => setUploadMethod('file')}
+          >
+            <FiFile className="inline mr-2" />
+            Upload File
+          </button>
+        </div>
+        
+        <form onSubmit={handleSubmit}>
+          {uploadMethod === 'paste' ? (
+            <div className="mb-4">
+              <label htmlFor="logText" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Paste your log content below:
+              </label>
+              <textarea
+                id="logText"
+                rows="12"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                placeholder="Paste your log content here..."
+                value={logText}
+                onChange={(e) => setLogText(e.target.value)}
+              ></textarea>
+            </div>
+          ) : (
+            <div 
+              className={`mb-4 border-2 border-dashed rounded-lg p-6 text-center ${
+                dragActive 
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
+                  : 'border-gray-300 dark:border-gray-600'
+              }`}
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+            >
+              <FiUpload className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
+              <div className="mt-2">
+                <label htmlFor="file-upload" className="cursor-pointer">
+                  <span className="mt-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Drag and drop a file here, or click to select a file
+                  </span>
+                  <input
+                    id="file-upload"
+                    name="file-upload"
+                    type="file"
+                    className="sr-only"
+                    accept=".log,.txt,.json"
+                    onChange={handleFileChange}
+                  />
+                </label>
+              </div>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Supported formats: .log, .txt, .json
+              </p>
+              {fileName && (
+                <div className="mt-3 text-sm text-gray-800 dark:text-gray-200">
+                  Selected file: <span className="font-medium">{fileName}</span>
+                </div>
+              )}
+            </div>
+          )}
+          
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={!logText.trim()}
+              className={`px-4 py-2 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                logText.trim()
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500'
+                  : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              Analyze Log
+            </button>
+          </div>
+        </form>
       </div>
       
-      {/* Error Message */}
-      {error && (
-        <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-md">
-          {error}
-        </div>
-      )}
-      
-      {/* Upload File Tab */}
-      {activeTab === 'upload' && (
-        <div className="mb-6">
-          <div
-            className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center ${
-              dragActive
-                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                : 'border-gray-300 dark:border-gray-700'
-            }`}
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-            style={{ minHeight: '300px' }}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              accept=".txt,.log"
-              onChange={handleFileInputChange}
-            />
-            
-            {!selectedFile ? (
-              <>
-                <FiUpload className="h-12 w-12 text-gray-400 mb-4" />
-                <p className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Drag and drop your log file here
-                </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                  or click to browse files (TXT, LOG)
-                </p>
-                <button
-                  type="button"
-                  onClick={handleUploadClick}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                >
-                  Select File
-                </button>
-              </>
-            ) : (
-              <div className="w-full">
-                <div className="flex items-center justify-between bg-gray-100 dark:bg-gray-800 p-4 rounded-md mb-4">
-                  <div className="flex items-center">
-                    <FiFile className="h-6 w-6 text-blue-600 dark:text-blue-400 mr-3" />
-                    <div>
-                      <p className="font-medium text-gray-900 dark:text-white">
-                        {selectedFile.name}
-                      </p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {(selectedFile.size / 1024).toFixed(2)} KB
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleRemoveFile}
-                    className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                  >
-                    <FiX className="h-5 w-5" />
-                  </button>
-                </div>
-                
-                <div className="border border-gray-200 dark:border-gray-700 rounded-md p-4 bg-white dark:bg-gray-800 max-h-60 overflow-auto">
-                  <pre className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
-                    {fileContent.length > 1000
-                      ? `${fileContent.substring(0, 1000)}...`
-                      : fileContent}
-                  </pre>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-      
-      {/* Paste Content Tab */}
-      {activeTab === 'paste' && (
-        <div className="mb-6">
-          <textarea
-            value={pastedContent}
-            onChange={handlePasteChange}
-            placeholder="Paste your log content here..."
-            className="w-full h-80 p-4 border border-gray-300 dark:border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
-          />
-        </div>
-      )}
-      
-      {/* Submit Button */}
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={isLoading}
-          className={`px-6 py-2 rounded-md flex items-center ${
-            isLoading
-              ? 'bg-gray-400 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
-          } text-white`}
-        >
-          {isLoading ? (
-            <>
-              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Processing...
-            </>
-          ) : (
-            <>
-              <FiCheck className="mr-2" />
-              Analyze Log
-            </>
-          )}
-        </button>
+      {/* Tips Section */}
+      <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <h3 className="text-lg font-medium text-blue-800 dark:text-blue-300 mb-2">Tips for Better Analysis</h3>
+        <ul className="list-disc list-inside text-sm text-blue-700 dark:text-blue-400 space-y-1">
+          <li>Include complete log entries with timestamps and log levels</li>
+          <li>Provide context about the application environment</li>
+          <li>Include stack traces for error analysis</li>
+          <li>For large logs, focus on the relevant time period around the issue</li>
+          <li>Include system information if available (OS, memory, CPU)</li>
+        </ul>
       </div>
     </div>
   );
